@@ -67,6 +67,8 @@ UKF::UKF() {
     //holding predicted sigma points, 5 x 15 dimention matrix, including augmented noise
     Xsig_pred_ = MatrixXd(n_x_, 2* n_aug_ +1);
 
+    is_initialized_ = false;
+
 
 }
 
@@ -74,17 +76,17 @@ UKF::~UKF() {}
 
 
 // predicting state with dt
-VectorXd predictX(VectorXd x, double dt,int n_x_){
+VectorXd predictX(const VectorXd x,const double dt,const int n_x_){
 
 
 
-    double px =  x(0);
-    double py =  x(1);
-    double  v =  x(2);
-    double psi = x(3);
-    double dpsi =x(4);
-    double va =  x(5);
-    double vp =  x(6);
+    const double px =  x(0);
+    const double py =  x(1);
+    const double  v =  x(2);
+    const double psi = x(3);
+    const double dpsi =x(4);
+    const double va =  x(5);
+    const double vp =  x(6);
 
     double dt2 = dt*dt;
 
@@ -116,11 +118,12 @@ VectorXd predictX(VectorXd x, double dt,int n_x_){
 
 // Radar measurement
 VectorXd getRadarMeasurement(const VectorXd x){
-    double  px = x(0);
-    double  py = x(1);
-    double   v = x(2);
-    double  psi = x(3);
-    double dpsi = x(4);
+    const double  px = x(0);
+    const double  py = x(1);
+    const double   v = x(2);
+    const double  psi = x(3);
+    const double dpsi = x(4);
+
     VectorXd Z = VectorXd(3);
 
     if (sqrt(pow(px*px + py*py,2))>0.001){
@@ -183,8 +186,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
             x_(0) = rho*cos(psi);
             x_(1) = rho*sin(psi);
-            x_(2) = drho*cos(psi);
-            x_(3) = drho*sin(psi);
+            x_(2) = abs(drho);//drho*cos(psi);
+            x_(3) = 0;//drho*sin(psi);
             x_(4) = 0; //init to zero
             if (fabs(rho)>0.001){
                 is_initialized_ = true;
@@ -223,10 +226,10 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     //Use small dt to allow for turn effect
     const double diff_t = 0.1;
 
-    while (dt > diff_t){
-        Prediction(diff_t);
-        dt -= diff_t;
-    }
+   // while (dt > diff_t){
+   //     Prediction(diff_t);
+   //     dt -= diff_t;
+   // }
 
     if ( dt > 0.001 ) {
         Prediction(dt); // update states only if dt is above 0.001
@@ -286,10 +289,11 @@ void UKF::Prediction(double delta_t) {
     x_aug.head(n_x_) << x_;
 
     // augmented sigma points
+    double sqrt_lambda1 = sqrt(lambda_+n_aug_);
 
     Xsig_aug << x_aug,
-            x_aug*Ones_nAug+sqrt(lambda_+n_aug_)*A_aug,
-            x_aug*Ones_nAug-sqrt(lambda_+n_aug_)*A_aug; // generate sigma pts
+            x_aug*Ones_nAug+sqrt_lambda1*A_aug,
+            x_aug*Ones_nAug-sqrt_lambda1*A_aug; // generate sigma pts
 
 
 
@@ -375,6 +379,14 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
 }
 
+void normalizeAngles(const int index,  MatrixXd & paramMatrix , const int column ){
+
+    for (int i=0;i<index;i++){
+        paramMatrix(i,column) = atan2(sin(paramMatrix(i,column)),cos(paramMatrix(i,column)));
+
+    }
+}
+
 /**
  * Updates the state and the state covariance matrix using a radar measurement.
  * @param {MeasurementPackage} meas_package
@@ -414,7 +426,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
             std_radphi_*std_radphi_,
             std_radrd_*std_radrd_;
     S = S + MatrixXd(R_d.asDiagonal());
-    //cout<<"S"<<S<<endl;
+
     z_true = meas_package.raw_measurements_;
 
     MatrixXd Tc = MatrixXd(n_x_, n_z_);
@@ -423,10 +435,12 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     MatrixXd K = MatrixXd(n_x_,n_z_);
     Z_diff = (Zsig-z_pred*Ones_A);
 
-    for (int i=0;i<n_z_;i++){
-        Z_diff(i,2) = atan2(sin(Z_diff(i,2)),cos(Z_diff(i,2)));
+    normalizeAngles(n_z_,Z_diff,2);
 
-    }
+//    for (int i=0;i<n_z_;i++){
+//        Z_diff(i,2) = atan2(sin(Z_diff(i,2)),cos(Z_diff(i,2)));
+//
+//    }
 
     Tc = (Xsig_pred_-x_*Ones_A)*MatrixXd(weights.asDiagonal())*Z_diff.transpose();
     //calculate Kalman gain K;
