@@ -226,14 +226,21 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     //Use small dt to allow for turn effect
     const double diff_t = 0.1;
 
-   // while (dt > diff_t){
-   //     Prediction(diff_t);
-   //     dt -= diff_t;
-   // }
+//    while (dt > diff_t){
+//        Prediction(diff_t);
+//        dt -= diff_t;
+//    }
 
-    if ( dt > 0.001 ) {
+    while (dt > 0.2)
+            {
+                    double step = 0.1;
+            Prediction(step);
+            dt -= step;
+            }
+
+    //if ( dt > 0.001 ) {
         Prediction(dt); // update states only if dt is above 0.001
-    }
+    //}
 
 
 
